@@ -17,6 +17,20 @@ from aiogram.filters import Command
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
+# ----------------- تنظیمات ادمین -----------------
+# آیدی عددی تلگرام خود را در لیست زیر قرار دهید (مثال: [123456789])
+# همچنین می‌توانید در Environment Variables متغیر ADMIN_IDS را تعریف کنید (با کاما جدا شود)
+ADMIN_IDS = [
+    int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()
+]
+# اگر می‌خواهید مستقیم در کد وارد کنید، عدد آیدی خود را در خط زیر داخل کروشه بگذارید:
+# ADMIN_IDS.extend([123456789])
+
+
+def is_admin(user_id: int) -> bool:
+    return user_id in ADMIN_IDS
+# -------------------------------------------------
+
 # لینک API دریافت پروکسی‌های موبایل ایران (JoyProxy)
 JOYPROXY_API_URL = (
     "https://api.joyproxy.com/v2/extract?"
@@ -31,6 +45,53 @@ SESSION_BASE_DIR = "basket_sessions"
 if os.path.exists(SESSION_BASE_DIR):
     shutil.rmtree(SESSION_BASE_DIR, ignore_errors=True)
 os.makedirs(SESSION_BASE_DIR, exist_ok=True)
+
+# ----------------- بخش مدیریت آمار کاربران -----------------
+STATS_FILE = "usage_stats.json"
+stats_lock = threading.Lock()
+
+
+def load_usage_stats():
+    if os.path.exists(STATS_FILE):
+        try:
+            with open(STATS_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {"users": {}, "total_requests": 0, "total_links": 0}
+
+
+def record_user_link_submission(user, links_count):
+    with stats_lock:
+        data = load_usage_stats()
+        uid = str(user.id)
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        if uid not in data["users"]:
+            data["users"][uid] = {
+                "name": user.full_name,
+                "username": user.username or "ندارد",
+                "submissions": 0,
+                "links_count": 0,
+                "first_seen": now_str,
+                "last_seen": now_str
+            }
+
+        data["users"][uid]["name"] = user.full_name
+        data["users"][uid]["username"] = user.username or "ندارد"
+        data["users"][uid]["submissions"] += 1
+        data["users"][uid]["links_count"] += links_count
+        data["users"][uid]["last_seen"] = now_str
+
+        data["total_requests"] = data.get("total_requests", 0) + 1
+        data["total_links"] = data.get("total_links", 0) + links_count
+
+        try:
+            with open(STATS_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+# -----------------------------------------------------------
 
 
 class ProxyManager:
@@ -515,13 +576,69 @@ def process_all_links(session_dir, template_url, target_urls):
 
 @router.message(Command("start"))
 async def cmd_start(message: Message):
-    await message.answer(
+    base_text = (
         "سیستم همگام‌سازی سبد خرید (مجهز به پروکسی چرخشی ایران JoyProxy) فعال است.\n\n"
         "لطفاً لیست لینک‌های خود را ارسال کنید.\n\n"
         "🟢 **اولین لینک:** اکانت مرجع (الگو)\n"
         "📍 **ضد تکرار صددرصدی:** مختصات نقشه، پلاک و واحد برای هر ۱۵۰+ اکانت به صورت کاملاً یکتا ثبت می‌شود.\n"
         "🔄 **تلاش مجدد خودکار:** در صورت بروز هرگونه خطای پروکسی یا شبکه، سیستم به صورت خودکار پروکسی را عوض کرده و مجدداً تلاش می‌کند."
     )
+    if message.from_user and is_admin(message.from_user.id):
+        base_text += "\n\n👑 **پنل ادمین:** برای مشاهده آمار کاربران دستور /stats را ارسال کنید."
+
+    await message.answer(base_text)
+
+
+@router.message(Command("myid"))
+async def cmd_myid(message: Message):
+    if message.from_user:
+        await message.answer(f"🆔 آیدی عددی تلگرام شما:\n`{message.from_user.id}`")
+
+
+@router.message(Command("stats"))
+async def cmd_stats(message: Message):
+    # بررسی دسترسی ادمین
+    if not message.from_user or not is_admin(message.from_user.id):
+        return  # نادیده گرفتن دستور برای کاربران غیر ادمین
+
+    data = load_usage_stats()
+    users = data.get("users", {})
+    total_unique_users = len(users)
+    total_requests = data.get("total_requests", 0)
+    total_links = data.get("total_links", 0)
+
+    if total_unique_users == 0:
+        await message.answer("📊 تاکنون هیچ کاربری لینکی وارد ربات نکرده است.")
+        return
+
+    text = (
+        f"📊 **گزارش آمار کاربران ربات (مخصوص ادمین):**\n\n"
+        f"👥 **تعداد کل افراد منحصربه‌فرد:** `{total_unique_users}` نفر\n"
+        f"🔄 **مجموع دفعات ارسال لیست:** `{total_requests}` بار\n"
+        f"🔗 **مجموع کل لینک‌های وارد شده:** `{total_links}` لینک\n"
+        f"{'-'*30}\n"
+        f"👤 **لیست آخرین کاربران فعال:**\n\n"
+    )
+
+    sorted_users = sorted(
+        users.items(), 
+        key=lambda x: x[1].get("last_seen", ""), 
+        reverse=True
+    )
+
+    for idx, (uid, info) in enumerate(sorted_users[:20], 1):
+        name = info.get("name", "نامشخص")
+        username = f"@{info['username']}" if info.get("username") != "ندارد" else "بدون یوزرنیم"
+        subs = info.get("submissions", 0)
+        links = info.get("links_count", 0)
+        last_seen = info.get("last_seen", "-")
+        text += (
+            f"{idx}. **{name}** ({username}) | ID: `{uid}`\n"
+            f"   ├ دفعات ارسال: {subs} بار | مجموع لینک: {links}\n"
+            f"   └ آخرین فعالیت: `{last_seen}`\n\n"
+        )
+
+    await message.answer(text)
 
 
 @router.message(F.text)
@@ -531,6 +648,10 @@ async def handle_links_message(message: Message):
     if len(urls) < 2:
         await message.answer("خطا: لطفاً حداقل ۲ لینک (یک الگو و حداقل یک هدف) ارسال کنید.")
         return
+
+    # ثبت اطلاعات کاربر و تعداد لینک‌های ارسالی در آمار[span_0](start_span)[span_0](end_span)
+    if message.from_user:
+        record_user_link_submission(message.from_user, len(urls))
 
     template_url = urls[0]
     target_urls = urls[1:]
@@ -564,6 +685,13 @@ async def handle_links_message(message: Message):
 
     total_qty = sum(item['quantity'] for item in template_data['items'])
 
+    # بخش آمار در کپشن فقط برای ادمین نمایش داده می‌شود
+    admin_stats_line = ""
+    if message.from_user and is_admin(message.from_user.id):
+        current_stats = load_usage_stats()
+        total_users_count = len(current_stats.get("users", {}))
+        admin_stats_line = f"📊 کل کاربران استفاده کننده تاکنون: {total_users_count} نفر\n\n"
+
     report_text = (
         "✅ گزارش عملکرد همگام‌سازی:\n\n"
         f"📦 تعداد اقلام مرجع: {len(template_data['items'])} مدل (مجموع: {total_qty} عدد)\n"
@@ -574,6 +702,7 @@ async def handle_links_message(message: Message):
         f"🔴 خطای ثبت آدرس: {stats['error_address']}\n"
         f"🔴 خطای افزودن کالا: {stats['error_cart']}\n"
         f"🔴 خطای احراز هویت / توکن: {stats['error_token']}\n\n"
+        f"{admin_stats_line}"
         "فایل ZIP اکانت‌های آپدیت‌شده و گزارش Debug پیوست شدند."
     )
 
@@ -594,3 +723,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
