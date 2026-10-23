@@ -8,6 +8,7 @@ import time
 import uuid
 import random
 import re
+import io
 import threading
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -17,28 +18,6 @@ from aiogram.filters import Command
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# ----------------- تنظیمات ادمین -----------------
-# آیدی عددی تلگرام خود را در لیست زیر قرار دهید (مثال: [123456789])
-# همچنین می‌توانید در Environment Variables متغیر ADMIN_IDS را تعریف کنید (با کاما جدا شود)
-ADMIN_IDS = [
-    int(x.strip()) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()
-]
-# اگر می‌خواهید مستقیم در کد وارد کنید، عدد آیدی خود را در خط زیر داخل کروشه بگذارید:
-# ADMIN_IDS.extend([123456789])
-
-
-def is_admin(user_id: int) -> bool:
-    return user_id in ADMIN_IDS
-# -------------------------------------------------
-
-# لینک API دریافت پروکسی‌های موبایل ایران (JoyProxy)
-JOYPROXY_API_URL = (
-    "https://api.joyproxy.com/v2/extract?"
-    "token=1c3af1e9f3ad0078c9ba2e8890734471b4b20d13fcd1983676f58ea24d8a76bd"
-    "&count=200&duration=1m&country_geoname_id=130758"
-    "&network_type=cellular&format=crlf&output=auth"
-)
-
 router = Router()
 
 SESSION_BASE_DIR = "basket_sessions"
@@ -46,57 +25,11 @@ if os.path.exists(SESSION_BASE_DIR):
     shutil.rmtree(SESSION_BASE_DIR, ignore_errors=True)
 os.makedirs(SESSION_BASE_DIR, exist_ok=True)
 
-# ----------------- بخش مدیریت آمار کاربران -----------------
-STATS_FILE = "usage_stats.json"
-stats_lock = threading.Lock()
-
-
-def load_usage_stats():
-    if os.path.exists(STATS_FILE):
-        try:
-            with open(STATS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {"users": {}, "total_requests": 0, "total_links": 0}
-
-
-def record_user_link_submission(user, links_count):
-    with stats_lock:
-        data = load_usage_stats()
-        uid = str(user.id)
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-        if uid not in data["users"]:
-            data["users"][uid] = {
-                "name": user.full_name,
-                "username": user.username or "ندارد",
-                "submissions": 0,
-                "links_count": 0,
-                "first_seen": now_str,
-                "last_seen": now_str
-            }
-
-        data["users"][uid]["name"] = user.full_name
-        data["users"][uid]["username"] = user.username or "ندارد"
-        data["users"][uid]["submissions"] += 1
-        data["users"][uid]["links_count"] += links_count
-        data["users"][uid]["last_seen"] = now_str
-
-        data["total_requests"] = data.get("total_requests", 0) + 1
-        data["total_links"] = data.get("total_links", 0) + links_count
-
-        try:
-            with open(STATS_FILE, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-        except Exception:
-            pass
-# -----------------------------------------------------------
-
 
 class ProxyManager:
-    def __init__(self, api_url):
-        self.api_url = api_url
+    def __init__(self):
+        self.api_url = None
+        self.static_proxies = []
         self.proxies = []
         self.last_fetch = 0
         self.lock = threading.Lock()
@@ -105,7 +38,7 @@ class ProxyManager:
         line = line.strip()
         if not line:
             return None
-        if line.startswith("http://") or line.startswith("https://") or line.startswith("socks5://"):
+        if line.startswith(("http://", "https://", "socks5://")):
             return line
         if "@" in line:
             return f"http://{line}"
@@ -117,16 +50,39 @@ class ProxyManager:
             return f"http://{line}"
         return None
 
+    def set_api_url(self, url):
+        with self.lock:
+            self.api_url = url
+            self.static_proxies = []
+            self.proxies = []
+            self.last_fetch = 0
+        return self.refresh_proxies()
+
+    def set_proxy_list(self, raw_text):
+        parsed = []
+        for line in raw_text.strip().splitlines():
+            p = self._parse_proxy_line(line)
+            if p:
+                parsed.append(p)
+        with self.lock:
+            if parsed:
+                self.static_proxies = parsed
+                self.api_url = None
+                self.proxies = parsed
+                return len(parsed)
+        return 0
+
     def refresh_proxies(self):
+        if not self.api_url:
+            return False
         try:
             res = requests.get(self.api_url, timeout=20)
             if res.status_code == 200 and res.text.strip():
-                raw_lines = res.text.strip().splitlines()
-                parsed = []
-                for line in raw_lines:
-                    p = self._parse_proxy_line(line)
-                    if p:
-                        parsed.append(p)
+                parsed = [
+                    self._parse_proxy_line(line)
+                    for line in res.text.strip().splitlines()
+                    if self._parse_proxy_line(line)
+                ]
                 if parsed:
                     self.proxies = parsed
                     self.last_fetch = time.time()
@@ -137,22 +93,32 @@ class ProxyManager:
 
     def get_proxy(self):
         with self.lock:
-            if not self.proxies or (time.time() - self.last_fetch > 50):
-                self.refresh_proxies()
-            
-            if self.proxies:
-                selected = random.choice(self.proxies)
+            if self.static_proxies:
+                selected = random.choice(self.static_proxies)
                 return {"http": selected, "https": selected}
+
+            if self.api_url:
+                if not self.proxies or (time.time() - self.last_fetch > 60):
+                    self.refresh_proxies()
+                if self.proxies:
+                    selected = random.choice(self.proxies)
+                    return {"http": selected, "https": selected}
+
         return None
 
+    def count(self):
+        with self.lock:
+            if self.static_proxies:
+                return len(self.static_proxies)
+            if self.proxies:
+                return len(self.proxies)
+        return 0
 
-proxy_manager = ProxyManager(JOYPROXY_API_URL)
+
+proxy_manager = ProxyManager()
 
 
 class UniqueAddressGenerator:
-    """
-    تضمین عدم تکرار مختصات، پلاک و واحد برای بیش از ۱۵۰ اکانت (بدون دستکاری متن آدرس)
-    """
     def __init__(self):
         self.used_coords = set()
         self.used_plaque_unit = set()
@@ -160,7 +126,6 @@ class UniqueAddressGenerator:
 
     def generate(self, base_lat, base_lng, base_address_text):
         with self.lock:
-            # ۱. تولید مختصات کاملاً یکتا در شعاع ۱۵ تا ۵۵ متری (بدون خروج از محدوده فروشگاه)
             while True:
                 lat_offset = random.choice([-1, 1]) * random.uniform(0.00010, 0.00048)
                 lng_offset = random.choice([-1, 1]) * random.uniform(0.00010, 0.00048)
@@ -171,7 +136,6 @@ class UniqueAddressGenerator:
                     self.used_coords.add(coord_key)
                     break
 
-            # ۲. تولید ترکیب (پلاک، واحد) کاملاً یکتا برای هر اکانت
             while True:
                 plaque_val = random.randint(1, 250)
                 unit_val = random.randint(1, 16)
@@ -193,18 +157,18 @@ class UniqueAddressGenerator:
 def fetch_data(url):
     for attempt in range(4):
         try:
-            res = requests.get(url, timeout=15)
+            res = requests.get(url, timeout=20)
             if res.status_code == 200:
                 return res.json()
         except Exception:
             try:
                 px = proxy_manager.get_proxy()
-                res = requests.get(url, proxies=px, timeout=20)
+                res = requests.get(url, proxies=px, timeout=25)
                 if res.status_code == 200:
                     return res.json()
             except Exception:
                 pass
-        time.sleep(1)
+        time.sleep(2.0)
     return None
 
 
@@ -246,10 +210,9 @@ def get_user_id_from_token(token):
         payload += '=' * (-len(payload) % 4)
         decoded_bytes = base64.urlsafe_b64decode(payload)
         data = json.loads(decoded_bytes)
-        
         uid = data.get('userId') or data.get('alternativeCustomerId')
         if uid:
-            return int(uid) 
+            return int(uid)
         return 0
     except Exception:
         return 0
@@ -276,7 +239,7 @@ class OkalaAPI:
         with self.log_lock:
             self.request_logs.append(log_entry)
 
-    def make_request(self, method, url, access_token=None, max_retries=6, **kwargs):
+    def make_request(self, method, url, access_token=None, max_retries=5, **kwargs):
         headers = self.base_headers.copy()
         headers['X-Correlation-Id'] = str(uuid.uuid4())
         headers['X-User-Unique-Id'] = str(uuid.uuid4())
@@ -298,7 +261,7 @@ class OkalaAPI:
                     method, url, headers=headers, proxies=current_proxy, timeout=30, **kwargs
                 )
                 self.log_request(method, url, res.status_code, res.text)
-                
+
                 if res.status_code == 200:
                     try:
                         return 200, res.json()
@@ -309,13 +272,13 @@ class OkalaAPI:
                 else:
                     last_status = res.status_code
                     last_text = res.text
-                    time.sleep(random.uniform(1.0, 2.5))
+                    time.sleep(random.uniform(2.5, 4.5))
                     continue
             except Exception as e:
                 self.log_request(method, url, f"EXCEPTION (Attempt {attempt+1})", str(e))
-                time.sleep(random.uniform(1.0, 2.5))
+                time.sleep(random.uniform(2.5, 4.5))
                 continue
-                
+
         return last_status, last_text
 
     def refresh_token(self, refresh_token):
@@ -340,18 +303,18 @@ class OkalaAPI:
     def add_address(self, token, uid, unique_addr):
         url = 'https://apigateway.okala.com/api/voyager/C/CustomerAccount/AddAddress/'
         payload = {
-            'id': 0, 
-            'customerId': uid, 
-            'mobilePhone': '', 
+            'id': 0,
+            'customerId': uid,
+            'mobilePhone': '',
             'ShoppingSectorPartId': '0',
-            'shoppingSectorId': '0', 
-            'plaque': unique_addr['plaque'], 
-            'unit': unique_addr['unit'], 
+            'shoppingSectorId': '0',
+            'plaque': unique_addr['plaque'],
+            'unit': unique_addr['unit'],
             'lat': unique_addr['lat'],
-            'lng': unique_addr['lng'], 
-            'title': None, 
-            'addressTypeId': unique_addr['addressTypeId'], 
-            'oprationDuration': random.randint(8500, 24000), 
+            'lng': unique_addr['lng'],
+            'title': None,
+            'addressTypeId': unique_addr['addressTypeId'],
+            'oprationDuration': random.randint(8500, 24000),
             'address': unique_addr['address'],
             'mapPlatform': 'ParsiMap'
         }
@@ -378,12 +341,12 @@ class OkalaAPI:
 
 
 def worker_copy_basket(target_url, api, template_data, addr_generator):
-    time.sleep(random.uniform(0.1, 1.2))
-    
+    time.sleep(random.uniform(2.0, 4.0))
+
     data = fetch_data(target_url)
     if not data:
         return target_url, "error_fetch", None
-    
+
     acc_token, ref_token = get_tokens_from_data(data)
     if not acc_token:
         return target_url, "error_token", data
@@ -397,18 +360,18 @@ def worker_copy_basket(target_url, api, template_data, addr_generator):
 
     address_added = False
     for attempt in range(4):
-        status, response_data = api.add_address(acc_token, uid, unique_addr)
+        status, _ = api.add_address(acc_token, uid, unique_addr)
         if status == 401 and ref_token:
             new_acc, new_ref = api.refresh_token(ref_token)
             if new_acc:
                 data = update_tokens_in_data(data, acc_token, new_acc, ref_token, new_ref)
                 acc_token, ref_token = new_acc, new_ref
-                status, response_data = api.add_address(acc_token, uid, unique_addr)
-        
+                status, _ = api.add_address(acc_token, uid, unique_addr)
+
         if status == 200:
             address_added = True
             break
-        time.sleep(random.uniform(1.0, 2.5))
+        time.sleep(random.uniform(2.5, 4.5))
 
     if not address_added:
         return target_url, "error_address", data
@@ -424,12 +387,12 @@ def worker_copy_basket(target_url, api, template_data, addr_generator):
                         data = update_tokens_in_data(data, acc_token, new_acc, ref_token, new_ref)
                         acc_token, ref_token = new_acc, new_ref
                         c_status, _ = api.add_to_cart(acc_token, uid, template_data['store_id'], item['productId'])
-                
+
                 if c_status == 200:
                     added_count += 1
                     break
-                time.sleep(random.uniform(0.8, 1.8))
-            time.sleep(random.uniform(0.3, 0.7))
+                time.sleep(random.uniform(2.0, 3.5))
+            time.sleep(random.uniform(1.5, 2.5))
 
     if added_count == 0 and len(template_data['items']) > 0:
         return target_url, "error_cart", data
@@ -438,20 +401,21 @@ def worker_copy_basket(target_url, api, template_data, addr_generator):
 
 
 def process_all_links(session_dir, template_url, target_urls):
-    proxy_manager.refresh_proxies()
-    
+    if proxy_manager.api_url:
+        proxy_manager.refresh_proxies()
+
     api = OkalaAPI()
     addr_generator = UniqueAddressGenerator()
 
     template_data_json = fetch_data(template_url)
     if not template_data_json:
-        return None, None, "خطا: امکان دریافت اطلاعات اکانت مرجع (اولین لینک) وجود ندارد."
+        return None, None, "خطا در دریافت اکانت مرجع."
 
     t_acc, t_ref = get_tokens_from_data(template_data_json)
     t_uid = get_user_id_from_token(t_acc)
 
     if not t_uid or t_uid == 0:
-        return None, None, "خطا: ساختار توکن اکانت مرجع معتبر نمی‌باشد."
+        return None, None, "خطا در توکن اکانت مرجع."
 
     status, addr_res = api.get_address(t_acc, t_uid)
     if status == 401 and t_ref:
@@ -465,9 +429,8 @@ def process_all_links(session_dir, template_url, target_urls):
     if status == 200 and isinstance(addr_res, dict) and addr_res.get('data'):
         template_addr = addr_res['data'][0]
     else:
-        api.log_request("INFO", "Template Address", 0, "No saved address found. Using mapInfo fallback.")
         lat, lng = 36.2972, 59.6067
-        addr_text = "آدرس انتخاب شده از روی نقشه"
+        addr_text = "آدرس ثبت شده"
         try:
             for origin in template_data_json.get('origins', []):
                 for item in origin.get('localStorage', []):
@@ -477,9 +440,9 @@ def process_all_links(session_dir, template_url, target_urls):
                             lat = map_info['selectedCity']['lat']
                             lng = map_info['selectedCity']['lng']
                             addr_text = map_info['selectedCity'].get('name', addr_text)
-        except Exception as e:
-            api.log_request("ERROR", "mapInfo parse", 0, str(e))
-            
+        except Exception:
+            pass
+
         template_addr = {
             'lat': lat,
             'lng': lng,
@@ -492,20 +455,20 @@ def process_all_links(session_dir, template_url, target_urls):
 
     status, stores_res = api.get_stores(t_acc, template_addr['lat'], template_addr['lng'], t_uid)
     if status != 200 or not isinstance(stores_res, dict) or not stores_res.get('data', {}).get('stores'):
-        return None, api.request_logs, "خطا: هیچ فروشگاهی برای مختصات اکانت مرجع یافت نشد (یا پروکسی‌ها پاسخ ندادند)."
+        return None, api.request_logs, "فروشگاهی برای اکانت مرجع یافت نشد."
 
     store_ids = [s['storeId'] for s in stores_res['data']['stores']]
 
     status, cart_res = api.get_cart(t_acc, t_uid, store_ids)
     if status != 200 or not isinstance(cart_res, dict) or not cart_res.get('data', {}).get('result'):
-        return None, api.request_logs, "خطا: امکان بازیابی سبد خرید اکانت مرجع وجود ندارد."
+        return None, api.request_logs, "خطا در دریافت سبد خرید مرجع."
 
     cart_data = cart_res['data']['result'][0]
     cart_items = cart_data.get('items', [])
     cart_store_id = cart_data.get('storeId')
 
     if not cart_items:
-        return None, api.request_logs, "خطا: سبد خرید اکانت مرجع خالی است."
+        return None, api.request_logs, "سبد خرید مرجع خالی است."
 
     template_data = {
         'address': {
@@ -520,26 +483,24 @@ def process_all_links(session_dir, template_url, target_urls):
     }
 
     stats = {
-        "total_targets": len(target_urls), 
-        "success": 0, 
-        "error_fetch": 0, 
-        "error_address": 0, 
-        "error_cart": 0, 
-        "error_token": 0
+        "total_targets": len(target_urls),
+        "success": 0,
+        "failed": 0
     }
-    
+
     updated_dir = os.path.join(session_dir, "Updated_Accounts")
     os.makedirs(updated_dir, exist_ok=True)
 
     with open(os.path.join(updated_dir, "template_account.json"), "w", encoding="utf-8") as f:
         json.dump(template_data_json, f, ensure_ascii=False, indent=2)
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    # سرعت پایین‌تر و ترافیک کنترل‌شده با ۲ ورکر همزمان
+    with ThreadPoolExecutor(max_workers=2) as executor:
         futures = {
-            executor.submit(worker_copy_basket, url, api, template_data, addr_generator): url 
+            executor.submit(worker_copy_basket, url, api, template_data, addr_generator): url
             for url in target_urls
         }
-        
+
         counter = 1
         for future in as_completed(futures):
             url = futures[future]
@@ -547,15 +508,9 @@ def process_all_links(session_dir, template_url, target_urls):
                 _, result, updated_json = future.result()
                 if result == "success":
                     stats["success"] += 1
-                elif result == "error_fetch":
-                    stats["error_fetch"] += 1
-                elif result in ["error_token", "error_uuid"]:
-                    stats["error_token"] += 1
-                elif result == "error_address":
-                    stats["error_address"] += 1
-                elif result == "error_cart":
-                    stats["error_cart"] += 1
-                
+                else:
+                    stats["failed"] += 1
+
                 if updated_json:
                     file_name = url.strip('/').split('/')[-1]
                     if not file_name or len(file_name) < 5:
@@ -566,46 +521,101 @@ def process_all_links(session_dir, template_url, target_urls):
                         json.dump(updated_json, f, ensure_ascii=False, indent=2)
                 counter += 1
             except Exception:
-                stats["error_fetch"] += 1
+                stats["failed"] += 1
 
     final_zip_base = os.path.join(session_dir, "Updated_Accounts_Data")
     final_zip_path = shutil.make_archive(final_zip_base, 'zip', updated_dir)
 
-    return (final_zip_path, template_data, stats), api.request_logs, None
+    return (final_zip_path, stats), api.request_logs, None
 
 
 @router.message(Command("start"))
 async def cmd_start(message: Message):
-    return
+    await message.answer(
+        "ارسال پروکسی: فایل txt، متن پروکسی‌ها یا لینک API پروکسی\n"
+        "اجرای عملیات: ارسال لینک‌های اکانت‌ها (لینک اول: مرجع، سایر لینک‌ها: مقصد)"
+    )
 
 
-@router.message(Command("myid"))
-async def cmd_myid(message: Message):
-    return
+@router.message(Command("proxy"))
+async def cmd_proxy(message: Message):
+    text = message.text.replace("/proxy", "").strip()
+    if not text:
+        count = proxy_manager.count()
+        await message.answer(f"پروکسی‌های فعال: {count}")
+        return
+
+    if text.startswith(("http://", "https://")):
+        if proxy_manager.set_api_url(text):
+            await message.answer(f"لینک پروکسی ثبت شد ({proxy_manager.count()} پروکسی).")
+        else:
+            await message.answer("خطا در دریافت پروکسی از لینک.")
+    else:
+        saved = proxy_manager.set_proxy_list(text)
+        if saved > 0:
+            await message.answer(f"{saved} پروکسی ذخیره شد.")
+        else:
+            await message.answer("پروکسی معتبری یافت نشد.")
 
 
-@router.message(Command("stats"))
-async def cmd_stats(message: Message):
-    return
+@router.message(F.document)
+async def handle_proxy_file(message: Message, bot: Bot):
+    if not message.document.file_name.endswith(('.txt', '.csv')):
+        await message.answer("لطفاً فایل txt ارسال کنید.")
+        return
+
+    file_io = io.BytesIO()
+    await bot.download(message.document, destination=file_io)
+    content = file_io.getvalue().decode('utf-8', errors='ignore').strip()
+
+    if content.startswith(("http://", "https://")) and len(content.splitlines()) == 1:
+        if proxy_manager.set_api_url(content):
+            await message.answer(f"لینک پروکسی ثبت شد ({proxy_manager.count()} پروکسی).")
+        else:
+            await message.answer("خطا در دریافت پروکسی از لینک.")
+    else:
+        saved = proxy_manager.set_proxy_list(content)
+        if saved > 0:
+            await message.answer(f"{saved} پروکسی ذخیره شد.")
+        else:
+            await message.answer("پروکسی معتبری در فایل یافت نشد.")
 
 
 @router.message(F.text)
-async def handle_links_message(message: Message):
-    urls = re.findall(r'(https?://\S+)', message.text)
-    
-    if len(urls) < 2:
+async def handle_text_message(message: Message):
+    text = message.text.strip()
+
+    # بررسی اگر پیام ارسالی پروکسی باشد (متن چندخطی یا پورت)
+    if ":" in text and not text.startswith("http") and ("." in text):
+        saved = proxy_manager.set_proxy_list(text)
+        if saved > 0:
+            await message.answer(f"{saved} پروکسی ذخیره شد.")
+            return
+
+    # استخراج لینک‌ها
+    urls = re.findall(r'(https?://\S+)', text)
+
+    # اگر کاربر تنها یک لینک فرستاد و لینک مربوط به API پروکسی بود
+    if len(urls) == 1 and ("proxy" in urls[0].lower() or "extract" in urls[0].lower()):
+        if proxy_manager.set_api_url(urls[0]):
+            await message.answer(f"لینک پروکسی ثبت شد ({proxy_manager.count()} پروکسی).")
+        else:
+            await message.answer("خطا در دریافت پروکسی از لینک.")
         return
 
-    if message.from_user:
-        record_user_link_submission(message.from_user, len(urls))
+    if len(urls) < 2:
+        await message.answer("حداقل ۲ لینک ارسال کنید.")
+        return
 
     template_url = urls[0]
     target_urls = urls[1:]
 
+    msg = await message.answer(f"⏳ در حال پردازش {len(target_urls)} اکانت...")
+
     session_id = str(uuid.uuid4())
     session_dir = os.path.join(SESSION_BASE_DIR, session_id)
     os.makedirs(session_dir, exist_ok=True)
-    
+
     result_data, logs, error_msg = await asyncio.to_thread(process_all_links, session_dir, template_url, target_urls)
 
     log_file_path = os.path.join(session_dir, "debug_report.txt")
@@ -614,21 +624,26 @@ async def handle_links_message(message: Message):
             f.write("\n".join(logs))
 
     if error_msg:
+        await msg.edit_text(error_msg)
         if os.path.exists(log_file_path):
-            pass
+            await message.answer_document(document=FSInputFile(log_file_path), caption="لاگ خطا")
         shutil.rmtree(session_dir, ignore_errors=True)
         return
 
-    if result_data is None:
-        shutil.rmtree(session_dir, ignore_errors=True)
-        return
+    final_zip_path, stats = result_data
+    await msg.delete()
 
-    final_zip_path, template_data, stats = result_data
+    report_text = (
+        f"پایان پردازش ({stats['total_targets']} اکانت):\n"
+        f"موفق: {stats['success']}\n"
+        f"ناموفق: {stats['failed']}"
+    )
+
+    await message.answer_document(document=FSInputFile(final_zip_path), caption=report_text)
     if os.path.exists(log_file_path):
-        pass
-    
+        await message.answer_document(document=FSInputFile(log_file_path), caption="فایل لاگ")
+
     shutil.rmtree(session_dir, ignore_errors=True)
-    return
 
 
 async def main():
@@ -641,4 +656,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-
