@@ -576,69 +576,17 @@ def process_all_links(session_dir, template_url, target_urls):
 
 @router.message(Command("start"))
 async def cmd_start(message: Message):
-    base_text = (
-        "سیستم همگام‌سازی سبد خرید (مجهز به پروکسی چرخشی ایران JoyProxy) فعال است.\n\n"
-        "لطفاً لیست لینک‌های خود را ارسال کنید.\n\n"
-        "🟢 **اولین لینک:** اکانت مرجع (الگو)\n"
-        "📍 **ضد تکرار صددرصدی:** مختصات نقشه، پلاک و واحد برای هر ۱۵۰+ اکانت به صورت کاملاً یکتا ثبت می‌شود.\n"
-        "🔄 **تلاش مجدد خودکار:** در صورت بروز هرگونه خطای پروکسی یا شبکه، سیستم به صورت خودکار پروکسی را عوض کرده و مجدداً تلاش می‌کند."
-    )
-    if message.from_user and is_admin(message.from_user.id):
-        base_text += "\n\n👑 **پنل ادمین:** برای مشاهده آمار کاربران دستور /stats را ارسال کنید."
-
-    await message.answer(base_text)
+    return
 
 
 @router.message(Command("myid"))
 async def cmd_myid(message: Message):
-    if message.from_user:
-        await message.answer(f"🆔 آیدی عددی تلگرام شما:\n`{message.from_user.id}`")
+    return
 
 
 @router.message(Command("stats"))
 async def cmd_stats(message: Message):
-    # بررسی دسترسی ادمین
-    if not message.from_user or not is_admin(message.from_user.id):
-        return  # نادیده گرفتن دستور برای کاربران غیر ادمین
-
-    data = load_usage_stats()
-    users = data.get("users", {})
-    total_unique_users = len(users)
-    total_requests = data.get("total_requests", 0)
-    total_links = data.get("total_links", 0)
-
-    if total_unique_users == 0:
-        await message.answer("📊 تاکنون هیچ کاربری لینکی وارد ربات نکرده است.")
-        return
-
-    text = (
-        f"📊 **گزارش آمار کاربران ربات (مخصوص ادمین):**\n\n"
-        f"👥 **تعداد کل افراد منحصربه‌فرد:** `{total_unique_users}` نفر\n"
-        f"🔄 **مجموع دفعات ارسال لیست:** `{total_requests}` بار\n"
-        f"🔗 **مجموع کل لینک‌های وارد شده:** `{total_links}` لینک\n"
-        f"{'-'*30}\n"
-        f"👤 **لیست آخرین کاربران فعال:**\n\n"
-    )
-
-    sorted_users = sorted(
-        users.items(), 
-        key=lambda x: x[1].get("last_seen", ""), 
-        reverse=True
-    )
-
-    for idx, (uid, info) in enumerate(sorted_users[:20], 1):
-        name = info.get("name", "نامشخص")
-        username = f"@{info['username']}" if info.get("username") != "ندارد" else "بدون یوزرنیم"
-        subs = info.get("submissions", 0)
-        links = info.get("links_count", 0)
-        last_seen = info.get("last_seen", "-")
-        text += (
-            f"{idx}. **{name}** ({username}) | ID: `{uid}`\n"
-            f"   ├ دفعات ارسال: {subs} بار | مجموع لینک: {links}\n"
-            f"   └ آخرین فعالیت: `{last_seen}`\n\n"
-        )
-
-    await message.answer(text)
+    return
 
 
 @router.message(F.text)
@@ -646,21 +594,13 @@ async def handle_links_message(message: Message):
     urls = re.findall(r'(https?://\S+)', message.text)
     
     if len(urls) < 2:
-        await message.answer("خطا: لطفاً حداقل ۲ لینک (یک الگو و حداقل یک هدف) ارسال کنید.")
         return
 
-    # ثبت اطلاعات کاربر و تعداد لینک‌های ارسالی در آمار[span_0](start_span)[span_0](end_span)
     if message.from_user:
         record_user_link_submission(message.from_user, len(urls))
 
     template_url = urls[0]
     target_urls = urls[1:]
-
-    msg = await message.answer(
-        f"⏳ در حال دریافت پروکسی‌های ایران و پردازش اکانت‌ها...\n"
-        f"تعداد اهداف: {len(target_urls)} اکانت\n"
-        f"لطفاً تا اتمام عملیات صبر کنید."
-    )
 
     session_id = str(uuid.uuid4())
     session_dir = os.path.join(SESSION_BASE_DIR, session_id)
@@ -674,43 +614,21 @@ async def handle_links_message(message: Message):
             f.write("\n".join(logs))
 
     if error_msg:
-        await msg.edit_text(error_msg)
         if os.path.exists(log_file_path):
-            await message.answer_document(document=FSInputFile(log_file_path), caption="فایل گزارش خطاها (Debug Log)")
+            pass
+        shutil.rmtree(session_dir, ignore_errors=True)
+        return
+
+    if result_data is None:
         shutil.rmtree(session_dir, ignore_errors=True)
         return
 
     final_zip_path, template_data, stats = result_data
-    await msg.delete()
-
-    total_qty = sum(item['quantity'] for item in template_data['items'])
-
-    # بخش آمار در کپشن فقط برای ادمین نمایش داده می‌شود
-    admin_stats_line = ""
-    if message.from_user and is_admin(message.from_user.id):
-        current_stats = load_usage_stats()
-        total_users_count = len(current_stats.get("users", {}))
-        admin_stats_line = f"📊 کل کاربران استفاده کننده تاکنون: {total_users_count} نفر\n\n"
-
-    report_text = (
-        "✅ گزارش عملکرد همگام‌سازی:\n\n"
-        f"📦 تعداد اقلام مرجع: {len(template_data['items'])} مدل (مجموع: {total_qty} عدد)\n"
-        f"🏪 کد فروشگاه (Store ID): {template_data['store_id']}\n\n"
-        f"👥 تعداد کل اهداف: {stats['total_targets']}\n"
-        f"🟢 موفق (با لوکیشن ۱۰۰٪ یکتا): {stats['success']}\n"
-        f"🔴 خطای دریافت لینک: {stats['error_fetch']}\n"
-        f"🔴 خطای ثبت آدرس: {stats['error_address']}\n"
-        f"🔴 خطای افزودن کالا: {stats['error_cart']}\n"
-        f"🔴 خطای احراز هویت / توکن: {stats['error_token']}\n\n"
-        f"{admin_stats_line}"
-        "فایل ZIP اکانت‌های آپدیت‌شده و گزارش Debug پیوست شدند."
-    )
-
-    await message.answer_document(document=FSInputFile(final_zip_path), caption=report_text)
     if os.path.exists(log_file_path):
-        await message.answer_document(document=FSInputFile(log_file_path), caption="گزارش کامل درخواست‌ها و پاسخ‌های سرور (Debug Log)")
+        pass
     
     shutil.rmtree(session_dir, ignore_errors=True)
+    return
 
 
 async def main():
