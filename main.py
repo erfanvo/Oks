@@ -27,108 +27,8 @@ os.makedirs(SESSION_BASE_DIR, exist_ok=True)
 
 CUSTOM_PROXIES_FILE = "custom_proxies.json"
 
-DEFAULT_PROXY_LIST = [
-    "http://Eyi7eecyfihd:pe1rm71fd72ka0k@209.50.177.175:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.6.98:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.15.99:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.47.48:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.35.213:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.160.216:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.51.133:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.180.169:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.232.240:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.52.87:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.251.136:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.191.84:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.28.133:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.37.181:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.224.92:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.255.106:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.47.128:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.38.17:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.170.180:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.172.165:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.37.53:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.169.0:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.227.194:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.53.50:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.180.78:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.188.218:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.249.209:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.33.21:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.39.129:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.191.208:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.186.116:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.167.19.176:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.58.95:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.13.165:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.32.145:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.33.227:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.45.178:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.38.33:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.47.195:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@217.181.91.121:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.44.69:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.230.228:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.53.28:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.187.186:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.235.149:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.174.138:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.37.105:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.37.240:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.40.40:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.56.236:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.242.198:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.34.203:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.171.62:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.239.126:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.169.3:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.244.93:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.53.140:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@217.181.91.129:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.44.251:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.173.23:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.46.156:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.245.137:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.8.250:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.162.29:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.243.249:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.232.50:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@193.56.28.28:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.13.253:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.242.2:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.34.129:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.29.199:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.42.143:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.29.224:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.36.239:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.4.143:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.14.79:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.1.18:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.54.229:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.42.147:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.227.153:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.55.53:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.7.244:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.182.193:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.36.52:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.225.85:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.181.217:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.62.25:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.58.236:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@216.26.244.191:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.25.234:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.39.139:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.38.200:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.21.224:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.40.150:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.191.58:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@104.207.58.48:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.180.171:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@65.111.4.154:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@209.50.189.21:3129",
-    "http://eyi7eecyfihd:pe1rm71fd72ka0k@45.3.40.101:3129"
-]
+# فقط پروکسی‌های ارسال‌شده توسط کاربر مجاز هستند؛ هیچ پروکسی داخلی/پیش‌فرض در کد باقی نمانده است.
+DEFAULT_PROXY_LIST = []
 
 PROXY_LIST = list(DEFAULT_PROXY_LIST)
 PROXY_LOCK = threading.Lock()
@@ -277,8 +177,12 @@ def load_saved_proxies():
             if isinstance(data, list) and len(data) > 0:
                 with PROXY_LOCK:
                     PROXY_LIST = data
+            else:
+                with PROXY_LOCK:
+                    PROXY_LIST = []
         except Exception:
-            pass
+            with PROXY_LOCK:
+                PROXY_LIST = []
 
 
 def save_custom_proxies(new_proxies: list[str]):
@@ -295,7 +199,7 @@ def save_custom_proxies(new_proxies: list[str]):
 def reset_to_default_proxies():
     global PROXY_LIST
     with PROXY_LOCK:
-        PROXY_LIST = list(DEFAULT_PROXY_LIST)
+        PROXY_LIST = []
     if os.path.exists(CUSTOM_PROXIES_FILE):
         try:
             os.remove(CUSTOM_PROXIES_FILE)
@@ -318,15 +222,12 @@ load_saved_proxies()
 # ==================== توابع اصلی عملیات اکانت و اوکالا ====================
 
 def fetch_data(url):
+    proxy_cfg = get_random_proxy()
+    if not proxy_cfg:
+        return None
     for attempt in range(3):
         try:
-            res = requests.get(url, timeout=20)
-            if res.status_code == 200:
-                return res.json()
-        except Exception:
-            pass
-        try:
-            res = requests.get(url, proxies=get_random_proxy(), timeout=20)
+            res = requests.get(url, proxies=proxy_cfg, timeout=20)
             if res.status_code == 200:
                 return res.json()
         except Exception:
@@ -408,7 +309,7 @@ def get_user_id_from_token(token):
 def generate_unique_addresses(base_addr, count, min_meters=MIN_OFFSET_METERS, max_meters=MAX_OFFSET_METERS):
     """
     تولید مختصات، پلاک و واحد کاملاً غیرتکراری برای تمام اکانت‌ها (مثلاً ۱۵۰ اکانت)
-    با حرکت چرخشی (بالا، پایین، راست، چپ و قطرها) در شعاع بسیار نزدیک (۸ تا ۴۵ متر)
+    با حرکت چرخشی (بالا، پایین، راست، چپ و قطر��ا) در شعاع بسیار نزدیک (۸ تا ۴۵ متر)
     تا فروشگاه به هیچ عنوان از محدوده خارج نشود.
     """
     base_lat = float(base_addr['lat'])
@@ -525,11 +426,14 @@ class OkalaAPI:
         if 'headers' in kwargs:
             headers.update(kwargs.pop('headers'))
 
+        proxy_cfg = get_random_proxy()
+        if not proxy_cfg:
+            return 0, "No user proxy configured"
+
         last_status, last_resp = 0, "Network Error"
         for attempt in range(4):
-            current_proxy = get_random_proxy()
             try:
-                res = requests.request(method, url, headers=headers, proxies=current_proxy, timeout=35, **kwargs)
+                res = requests.request(method, url, headers=headers, proxies=proxy_cfg, timeout=35, **kwargs)
                 self.log_request(method, url, res.status_code, res.text)
                 
                 if res.status_code == 200:
@@ -902,7 +806,7 @@ async def execute_batch_session(message: Message, urls: list[str]):
         f"⏳ در حال پردازش...\n"
         f"اکانت مرجع دریافت شد.\n"
         f"تعداد کل اکانت‌های هدف: {len(target_urls)}\n"
-        f"🌐 پروکسی‌های فعال: {len(PROXY_LIST)} عدد"
+        f"🌐 پروکسی‌های کاربر: {len(PROXY_LIST)} عدد"
     )
 
     session_id = str(uuid.uuid4())
@@ -999,11 +903,11 @@ async def cmd_start(message: Message):
     await message.answer(
         "سیستم همگام‌سازی سبد خرید و مدیریت هوشمند آدرس‌ها فعال است.\n\n"
         "📥 **ارسال اکانت‌ها:**\n"
-        "لیست لینک‌های خود (مثلاً ۱۵۰ اکانت) را در یک یا چند پیام پیاپی و یا در قالب فایل `.txt` بفرستید (اولین لینک = اکانت مرجع).\n\n"
+        "لیست لینک‌های خود (مثلاً ۱۵۰ اکانت) را در یک یا چند پیام پیاپی و یا در قالب فایل `.txt` بفرستید (اولین لینک = اکانت مرجع، بقیه اهداف).\n\n"
         "🌐 **مدیریت پروکسی‌ها:**\n"
         "• `/proxy` : ثبت یا جایگزینی پروکسی‌های جدید (با متن، فایل `.txt` یا لینک API)\n"
         "• `/proxies` : مشاهده وضعیت و تعداد پروکسی‌های فعال\n"
-        "• `/reset_proxy` : بازگشت به پروکسی‌های پیش‌فرض"
+        "• `/reset_proxy` : حذف پروکسی‌های فعلی و آماده‌سازی برای ورود پروکسی‌های جدید"
     )
 
 
@@ -1056,8 +960,8 @@ async def cmd_show_proxies(message: Message):
         count = len(PROXY_LIST)
         sample = PROXY_LIST[:3]
     is_custom = os.path.exists(CUSTOM_PROXIES_FILE)
-    mode_str = "سفارشی (ارسال‌شده توسط کاربر)" if is_custom else "پیش‌فرض سیستم"
-    sample_text = "\n".join(f"• `{p}`" for p in sample)
+    mode_str = "فقط پروکسی‌های کاربر" if is_custom else "هیچ پروکسی‌ کاربر ثبت نشده"
+    sample_text = "\n".join(f"• `{p}`" for p in sample) if sample else "• هیچ پروکسی‌ای ثبت نشده است."
     await message.answer(
         f"🌐 **وضعیت پروکسی‌های فعال:**\n\n"
         f"• نوع لیست: {mode_str}\n"
@@ -1072,7 +976,7 @@ async def cmd_reset_proxy(message: Message):
     user_id = message.from_user.id if message.from_user else message.chat.id
     WAITING_FOR_PROXY_USERS.discard(user_id)
     reset_to_default_proxies()
-    await message.answer(f"🔄 لیست پروکسی‌ها به حالت پیش‌فرض ({len(PROXY_LIST)} عدد) بازنشانی شد.")
+    await message.answer("🔄 لیست پروکسی‌ها خالی شد. فقط پروکسی‌های جدید کاربر را ارسال کنید.")
 
 
 @router.message(F.document)
